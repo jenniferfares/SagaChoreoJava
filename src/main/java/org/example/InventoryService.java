@@ -1,37 +1,44 @@
 package org.example;
+
 import com.rabbitmq.client.*;
+import com.fasterxml.jackson.databind.ObjectMapper;
 
 public class InventoryService {
     private static final String INVENTORY_QUEUE = "inventory.queue";
     private static final String ACCOUNTING_QUEUE = "accounting.queue";
 
-    public static void main(String[] args) throws Exception {
-        Channel channel = RabbitMQConnection.createChannel();
-        RabbitMQConnection.setupQueues(channel);
+    public static void main(String[] args) {
+        try {
+            Channel channel = RabbitMQConnection.createChannel();
+            RabbitMQConnection.setupQueues(channel);
 
-        DeliverCallback deliverCallback = (consumerTag, delivery) -> {
-            String message = new String(delivery.getBody(), "UTF-8");
-            System.out.println("Inventory Service received: " + message);
+            DeliverCallback deliverCallback = (consumerTag, delivery) -> {
+                ObjectMapper objectMapper = new ObjectMapper();
+                String message = new String(delivery.getBody(), "UTF-8");
+                OrderMessage orderMessage = objectMapper.readValue(message, OrderMessage.class);
 
-            // Simulate inventory update
-            boolean inventorySuccess = updateInventory(message);
+                System.out.println("Inventory Service received: " + orderMessage);
 
-            if (inventorySuccess) {
-                System.out.println("Inventory Service successfully processed: " + message);
-            } else {
-                // If inventory fails, rollback the accounting
-                String rollbackMessage = "Inventory failed. Rolling back Accounting: " + message;
-                channel.basicPublish("", ACCOUNTING_QUEUE, null, rollbackMessage.getBytes());
-                System.out.println("Inventory Service rollback: " + rollbackMessage);
-            }
-        };
+                // Simulate inventory processing
+                boolean inventorySuccess = processInventory(orderMessage);
 
-        channel.basicConsume(INVENTORY_QUEUE, true, deliverCallback, consumerTag -> {});
+                if (inventorySuccess) {
+                    System.out.println("Inventory Service: Order fully processed: " + orderMessage);
+                } else {
+                    String rollbackMessage = objectMapper.writeValueAsString(orderMessage);
+                    channel.basicPublish("", ACCOUNTING_QUEUE, null, rollbackMessage.getBytes());
+                    System.out.println("Inventory Service rollback to Accounting Service: " + rollbackMessage);
+                }
+            };
+
+            channel.basicConsume(INVENTORY_QUEUE, true, deliverCallback, consumerTag -> {});
+        } catch (Exception e) {
+            e.printStackTrace();
+        }
     }
 
-    // Simulate inventory update logic
-    private static boolean updateInventory(String message) {
-        System.out.println("Updating Inventory for: " + message);
-        return true;  // Simulate inventory update success
+    private static boolean processInventory(OrderMessage orderMessage) {
+        System.out.println("Processing Inventory: " + orderMessage);
+        return Math.random() > 0.5;
     }
 }
