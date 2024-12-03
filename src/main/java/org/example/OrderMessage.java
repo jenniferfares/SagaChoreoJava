@@ -12,7 +12,7 @@ public class OrderMessage {
         this.items = items;
     }
 
-    // Getters and setters (optional for serialization/deserialization)
+    // Getters and setters 
     public int getOrderId() {
         return orderId;
     }
