@@ -15,9 +15,9 @@ public class RabbitMQConnection {
     // Method to declare the necessary queues for the saga
     public static void setupQueues(Channel channel) throws Exception {
         // Declare the queues
-        channel.queueDeclare("order", false, false, false, null);
-        channel.queueDeclare("payment", false, false, false, null);
-        channel.queueDeclare("accounting", false, false, false, null);
-        channel.queueDeclare("inventory", false, false, false, null);
+        channel.queueDeclare("order.queue", false, false, false, null);
+        channel.queueDeclare("payment.queue", false, false, false, null);
+        channel.queueDeclare("accounting.queue", false, false, false, null);
+        channel.queueDeclare("inventory.queue", false, false, false, null);
     }
 }
