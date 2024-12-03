@@ -1,40 +1,47 @@
 package org.example;
+
 import com.rabbitmq.client.*;
+import com.fasterxml.jackson.databind.ObjectMapper;
 
 public class AccountingService {
     private static final String ACCOUNTING_QUEUE = "accounting.queue";
     private static final String INVENTORY_QUEUE = "inventory.queue";
     private static final String PAYMENT_QUEUE = "payment.queue";
 
-    public static void main(String[] args) throws Exception {
-        Channel channel = RabbitMQConnection.createChannel();
-        RabbitMQConnection.setupQueues(channel);
+    public static void main(String[] args) {
+        try {
+            Channel channel = RabbitMQConnection.createChannel();
+            RabbitMQConnection.setupQueues(channel);
 
-        DeliverCallback deliverCallback = (consumerTag, delivery) -> {
-            String message = new String(delivery.getBody(), "UTF-8");
-            System.out.println("Accounting Service received: " + message);
+            DeliverCallback deliverCallback = (consumerTag, delivery) -> {
+                ObjectMapper objectMapper = new ObjectMapper();
+                String message = new String(delivery.getBody(), "UTF-8");
+                OrderMessage orderMessage = objectMapper.readValue(message, OrderMessage.class);
 
-            // Simulate accounting record creation
-            boolean accountingSuccess = processAccounting(message);
+                System.out.println("Accounting Service received: " + orderMessage);
 
-            if (accountingSuccess) {
-                String nextMessage = "Accounting Record Created: " + message;
-                channel.basicPublish("", INVENTORY_QUEUE, null, nextMessage.getBytes());
-                System.out.println("Accounting Service published to Inventory Queue: " + nextMessage);
-            } else {
-                // If accounting fails, rollback the payment
-                String rollbackMessage = "Accounting failed. Rolling back Payment: " + message;
-                channel.basicPublish("", PAYMENT_QUEUE, null, rollbackMessage.getBytes());
-                System.out.println("Accounting Service rollback: " + rollbackMessage);
-            }
-        };
+                // Simulate accounting processing
+                boolean accountingSuccess = processAccounting(orderMessage);
 
-        channel.basicConsume(ACCOUNTING_QUEUE, true, deliverCallback, consumerTag -> {});
+                if (accountingSuccess) {
+                    String nextMessage = objectMapper.writeValueAsString(orderMessage);
+                    channel.basicPublish("", INVENTORY_QUEUE, null, nextMessage.getBytes());
+                    System.out.println("Accounting Service published to Inventory Queue: " + nextMessage);
+                } else {
+                    String rollbackMessage = objectMapper.writeValueAsString(orderMessage);
+                    channel.basicPublish("", PAYMENT_QUEUE, null, rollbackMessage.getBytes());
+                    System.out.println("Accounting Service rollback to Payment Service: " + rollbackMessage);
+                }
+            };
+
+            channel.basicConsume(ACCOUNTING_QUEUE, true, deliverCallback, consumerTag -> {});
+        } catch (Exception e) {
+            e.printStackTrace();
+        }
     }
 
-    // Simulate accounting record creation logic
-    private static boolean processAccounting(String message) {
-        System.out.println("Processing Accounting Record: " + message);
-        return true;  // Simulate accounting success
+    private static boolean processAccounting(OrderMessage orderMessage) {
+        System.out.println("Processing Accounting: " + orderMessage);
+        return Math.random() > 0.5;
     }
 }
